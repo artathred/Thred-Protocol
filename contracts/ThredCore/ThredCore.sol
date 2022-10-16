@@ -39,6 +39,7 @@ contract ThredCore is
     struct SmartUtil {
         string name;
         string id;
+        string chains;
         address pay_address;
         uint256 category;
         uint256 price;
@@ -50,6 +51,8 @@ contract ThredCore is
     mapping(bytes32 => uint256) private _keys;
 
     mapping(address => uint256) private _reputation;
+
+    mapping(bytes32 => uint256) private _downloads;
 
     function pause() public {
         require(msg.sender == deployerAddress, "Unauthorized!");
@@ -153,6 +156,8 @@ contract ThredCore is
             emit Install(tokenId, util.price, to[i]);
         }
 
+        _downloads[key] = _downloads[key].add(to.length);
+
         uint256 fees = _calculateFee(totalPrice, 2);
         uint256 netPrice = totalPrice.sub(fees);
 
@@ -186,20 +191,26 @@ contract ThredCore is
         return twoPercentOfTokens;
     }
 
-    function _calculateExp(address user, uint256 cost, uint256 base)
-        internal
-        view
-        returns (uint256)
-    {
+    function _calculateExp(
+        address user,
+        uint256 cost,
+        uint256 base
+    ) internal view returns (uint256) {
         return _reputation[user].add(base.add(cost.div(10)));
     }
 
-    function fetchRep(address user)
+    function fetchRep(address user) public view returns (uint256) {
+        return _reputation[user];
+    }
+
+    function fetchDownloads(string calldata id, address creator)
         public
         view
         returns (uint256)
     {
-        return _reputation[user];
+        bytes32 key = keccak256(abi.encodePacked(id, creator));
+
+        return _downloads[key];
     }
 
     function _verify(SmartUtil calldata util) internal view returns (address) {
@@ -213,10 +224,11 @@ contract ThredCore is
                 keccak256(
                     abi.encode(
                         keccak256(
-                            "SmartUtil(string name,string id,address pay_address,uint256 category,uint256 price)"
+                            "SmartUtil(string name,string id,string chains,address pay_address,uint256 category,uint256 price)"
                         ),
                         keccak256(bytes(util.name)),
                         keccak256(bytes(util.id)),
+                        keccak256(bytes(util.chains)),
                         util.pay_address,
                         util.category,
                         util.price
