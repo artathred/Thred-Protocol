@@ -39,10 +39,10 @@ contract ThredCore is
     struct SmartUtil {
         string name;
         string id;
-        string chains;
         address pay_address;
         uint256 category;
         uint256 price;
+        uint256 modified;
         bytes signature;
     }
 
@@ -71,7 +71,6 @@ contract ThredCore is
         bytes memory data
     ) internal virtual override {
         super._beforeTokenTransfer(operator, from, to, ids, amounts, data);
-
         for (uint256 i = 0; i < ids.length; ++i) {
             if (isSoulbound(ids[i])) {
                 require(
@@ -224,14 +223,14 @@ contract ThredCore is
                 keccak256(
                     abi.encode(
                         keccak256(
-                            "SmartUtil(string name,string id,string chains,address pay_address,uint256 category,uint256 price)"
+                            "SmartUtil(string name,string id,address pay_address,uint256 category,uint256 price,uint256 modified)"
                         ),
                         keccak256(bytes(util.name)),
                         keccak256(bytes(util.id)),
-                        keccak256(bytes(util.chains)),
                         util.pay_address,
                         util.category,
-                        util.price
+                        util.price,
+                        util.modified
                     )
                 )
             );
