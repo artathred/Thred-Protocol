@@ -42,6 +42,7 @@ contract ThredCore is
         address pay_address;
         uint256 category;
         uint256 price;
+        uint256 created;
         uint256 modified;
         bytes signature;
     }
@@ -223,13 +224,14 @@ contract ThredCore is
                 keccak256(
                     abi.encode(
                         keccak256(
-                            "SmartUtil(string name,string id,address pay_address,uint256 category,uint256 price,uint256 modified)"
+                            "SmartUtil(string name,string id,address pay_address,uint256 category,uint256 price,uint256 created,uint256 modified)"
                         ),
                         keccak256(bytes(util.name)),
                         keccak256(bytes(util.id)),
                         util.pay_address,
                         util.category,
                         util.price,
+                        util.created,
                         util.modified
                     )
                 )
