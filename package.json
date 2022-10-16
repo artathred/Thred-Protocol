@@ -1,0 +1,17 @@
+{
+  "name": "thred-web",
+  "version": "0.0.0",
+  "skipLibCheck": true,
+  "scripts": {},
+  "private": true,
+  "dependencies": {
+    "@nomiclabs/hardhat-ethers": "^2.0.2",
+    "@nomiclabs/hardhat-waffle": "^2.0.1",
+    "@openzeppelin/contracts": "^4.5.0",
+    "@openzeppelin/contracts-upgradeable": "^4.6.0"
+  },
+  "devDependencies": {
+    "@openzeppelin/hardhat-upgrades": "^1.17.0",
+    "hardhat": "^2.11.2"
+  }
+}
