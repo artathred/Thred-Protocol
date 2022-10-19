@@ -44,6 +44,7 @@ contract ThredCore is
         uint256 price;
         uint256 created;
         uint256 modified;
+        uint256 chainId;
         bytes signature;
     }
 
@@ -58,6 +59,14 @@ contract ThredCore is
     function pause() public {
         require(msg.sender == deployerAddress, "Unauthorized!");
         PausableUpgradeable._pause();
+    }
+
+    function getChainID() public view returns (uint256) {
+        uint256 id;
+        assembly {
+            id := chainid()
+        }
+        return id;
     }
 
     /**
@@ -135,6 +144,8 @@ contract ThredCore is
         require(to.length > 1, "Invalid To Length. Must be > than 0");
 
         address signer = _verify(util);
+
+        require(util.chainId == getChainID(), "This item is not compatible with this chain");
 
         uint256 totalPrice = util.price.mul(to.length);
 
@@ -224,7 +235,7 @@ contract ThredCore is
                 keccak256(
                     abi.encode(
                         keccak256(
-                            "SmartUtil(string name,string id,address pay_address,uint256 category,uint256 price,uint256 created,uint256 modified)"
+                            "SmartUtil(string name,string id,address pay_address,uint256 category,uint256 price,uint256 created,uint256 modified, uint chainId)"
                         ),
                         keccak256(bytes(util.name)),
                         keccak256(bytes(util.id)),
@@ -232,7 +243,8 @@ contract ThredCore is
                         util.category,
                         util.price,
                         util.created,
-                        util.modified
+                        util.modified,
+                        util.chainId
                     )
                 )
             );
