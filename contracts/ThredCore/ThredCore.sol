@@ -36,6 +36,8 @@ contract ThredCore is
         address indexed user
     );
 
+    event Uninstall(uint256 indexed tokenId, address indexed user);
+
     struct SmartUtil {
         string name;
         string id;
@@ -56,6 +58,8 @@ contract ThredCore is
 
     mapping(bytes32 => uint256) private _downloads;
 
+    mapping(uint256 => string) private _ids;
+
     function pause() public {
         require(msg.sender == deployerAddress, "Unauthorized!");
         PausableUpgradeable._pause();
@@ -67,6 +71,14 @@ contract ThredCore is
             id := chainid()
         }
         return id;
+    }
+
+    function getAppIdForToken(uint256 tokenId)
+        public
+        view
+        returns (string memory)
+    {
+        return _ids[tokenId];
     }
 
     /**
@@ -87,6 +99,22 @@ contract ThredCore is
                     from == address(0) || to == address(0),
                     "Soulbound, Non-Transferable"
                 );
+            }
+        }
+    }
+
+    function _afterTokenTransfer(
+        address operator,
+        address from,
+        address to,
+        uint256[] memory ids,
+        uint256[] memory amounts,
+        bytes memory data
+    ) internal virtual override {
+        super._afterTokenTransfer(operator, from, to, ids, amounts, data);
+        for (uint256 i = 0; i < ids.length; ++i) {
+            if (to == address(0)) {
+                emit Uninstall(ids[i], from);
             }
         }
     }
@@ -141,11 +169,14 @@ contract ThredCore is
         nonReentrant
     {
         require(!PausableUpgradeable.paused(), "Transacting Paused");
-        require(to.length > 1, "Invalid To Length. Must be > than 0");
+        require(to.length > 0, "Invalid To Length. Must be > than 0");
 
         address signer = _verify(util);
 
-        require(util.chainId == getChainID(), "This item is not compatible with this chain");
+        require(
+            util.chainId == getChainID(),
+            "This item is not compatible with this chain"
+        );
 
         uint256 totalPrice = util.price.mul(to.length);
 
@@ -160,6 +191,8 @@ contract ThredCore is
             tokenId = registeredIds.current();
             _keys[key] = tokenId;
         }
+
+        _ids[tokenId] = util.id;
 
         for (uint256 i = 0; i < to.length; ++i) {
             _mint(to[i], tokenId, 1, "");
