@@ -1,6 +1,6 @@
 // contracts/ThredCore.sol
 // SPDX-License-Identifier: MIT
-pragma solidity >=0.8.0;
+pragma solidity >=0.8.3;
 
 import "@openzeppelin/contracts/utils/Strings.sol";
 import "@openzeppelin/contracts/utils/Counters.sol";
@@ -32,20 +32,19 @@ contract ThredCore is
 
     event Install(
         uint256 indexed tokenId,
-        uint256 indexed price,
+        address indexed signer,
         address indexed user
     );
 
     event Uninstall(uint256 indexed tokenId, address indexed user);
 
     struct SmartUtil {
-        string name;
         string id;
-        address pay_address;
-        uint256 category;
+        address signer;
+        address payAddress;
+        address feeAddress;
+        uint256 fee;
         uint256 price;
-        uint256 created;
-        uint256 modified;
         uint256 chainId;
         bytes signature;
     }
@@ -60,11 +59,17 @@ contract ThredCore is
 
     mapping(uint256 => string) private _ids;
 
+    /**
+     * @dev Pause all installations and withdrawals on the Thred Protocol.
+     */
     function pause() public {
         require(msg.sender == deployerAddress, "Unauthorized!");
         PausableUpgradeable._pause();
     }
 
+    /**
+     * @dev Retrieves the current Chain ID of the protocol.
+     */
     function getChainID() public view returns (uint256) {
         uint256 id;
         assembly {
@@ -73,6 +78,10 @@ contract ThredCore is
         return id;
     }
 
+    /**
+     * @dev Retrieves the registered App ID for the provided Token ID.
+     * @param tokenId Token ID of the installed application.
+     */
     function getAppIdForToken(uint256 tokenId)
         public
         view
@@ -81,9 +90,6 @@ contract ThredCore is
         return _ids[tokenId];
     }
 
-    /**
-     * @dev See {ERC1155-_beforeTokenTransfer}.
-     */
     function _beforeTokenTransfer(
         address operator,
         address from,
@@ -119,10 +125,6 @@ contract ThredCore is
         }
     }
 
-    /**
-     * @dev Returns true if a token type `id` is soulbound.
-     */
-
     function isSoulbound(uint256 id) public view virtual returns (bool) {
         return _soulbounds[id];
     }
@@ -131,12 +133,22 @@ contract ThredCore is
         _soulbounds[id] = soulbound;
         emit Soulbound(id, soulbound);
     }
+    
 
+    /**
+     * @dev Unpause all installations and withdrawals on the Thred Protocol.
+     */
     function unpause() public {
         require(msg.sender == deployerAddress, "Unauthorized!");
         PausableUpgradeable._unpause();
     }
 
+    /**
+     * @dev Initialize the Thred Protocol.
+     * @param owner The Whitelisted Owner Address of the Protocol.
+     * @param domain Domain used for verification in TVS.
+     * @param version Protocol version used for verification in TVS.
+     */
     function initialize(
         address owner,
         string memory domain,
@@ -151,6 +163,10 @@ contract ThredCore is
         deployerAddress = owner;
     }
 
+    /**
+     * @dev Retrieves the current payouts for a given list of addresses.
+     * @param payoutAddresses Array of addresses to fetch the payouts for.
+     */
     function fetchPayouts(address[] calldata payoutAddresses)
         public
         view
@@ -163,25 +179,42 @@ contract ThredCore is
         return payouts;
     }
 
-    function buySmartUtil(SmartUtil calldata util, address[] calldata to)
-        public
-        payable
-        nonReentrant
-    {
+    /**
+     * @dev Purchase, verify, and install an application under 'msg.sender'
+     * @param util Signature of the app being installed.
+     */
+    function buySmartUtil(SmartUtil calldata util) public payable nonReentrant {
         require(!PausableUpgradeable.paused(), "Transacting Paused");
-        require(to.length > 0, "Invalid To Length. Must be > than 0");
 
-        address signer = _verify(util);
+        address signer = _verifyTVS(util);
+
+        require(
+            signer == util.signer,
+            "Unauthorized Signer. App can not be installed."
+        );
+
+        require(msg.value == util.price, "Insufficient Funds");
 
         require(
             util.chainId == getChainID(),
             "This item is not compatible with this chain"
         );
 
-        uint256 totalPrice = util.price.mul(to.length);
+        _registerDownload(util, signer);
 
-        require(msg.value == totalPrice, "Insufficient Funds");
+        _setDeductibles(util);
 
+        _setExp(util, signer);
+    }
+
+    /**
+     * @dev Register the application under 'msg.sender'.
+     * @param util Signature of the app being installed.
+     * @param signer Signer of the application's TVS Signature.
+     */
+    function _registerDownload(SmartUtil calldata util, address signer)
+        internal
+    {
         bytes32 key = keccak256(abi.encodePacked(util.id, signer));
 
         uint256 tokenId = _keys[key];
@@ -194,21 +227,39 @@ contract ThredCore is
 
         _ids[tokenId] = util.id;
 
-        for (uint256 i = 0; i < to.length; ++i) {
-            _mint(to[i], tokenId, 1, "");
-            _setSoulbound(tokenId, true);
-            emit Install(tokenId, util.price, to[i]);
-        }
+        _mint(msg.sender, tokenId, 1, "");
+        _setSoulbound(tokenId, true);
+        emit Install(tokenId, signer, msg.sender);
 
-        _downloads[key] = _downloads[key].add(to.length);
+        _downloads[key] = _downloads[key].add(1);
+    }
 
-        uint256 fees = _calculateFee(totalPrice, 2);
-        uint256 netPrice = totalPrice.sub(fees);
+    /**
+     * @dev Set deductible fees for the application.
+     * @param util Signature of the app being installed.
+     */
+    function _setDeductibles(SmartUtil calldata util) internal {
+        uint256 fees = _calculateFee(util.price, 2);
+        uint256 appFees = _calculateFee(util.price, util.fee);
 
-        _deductibles[util.pay_address] = _deductibles[util.pay_address].add(
+        uint256 netPrice = util.price.sub(fees).sub(appFees);
+
+        _deductibles[util.payAddress] = _deductibles[util.payAddress].add(
             netPrice
         );
+        _deductibles[util.feeAddress] = _deductibles[util.feeAddress].add(
+            appFees
+        );
+
         _deductibles[deployerAddress] = _deductibles[deployerAddress].add(fees);
+    }
+
+    /**
+     * @dev Set new Experience Points for the Signer.
+     * @param util Signature of the app being installed.
+     * @param signer Signer of the application's TVS Signature.
+     */
+    function _setExp(SmartUtil calldata util, address signer) internal {
         _reputation[signer] = _calculateExp(signer, util.price, 200);
     }
 
@@ -225,6 +276,11 @@ contract ThredCore is
         _deductibles[msg.sender] = 0;
     }
 
+    /**
+     * @dev Calculate percentage fees from the given total.
+     * @param _num The total amount.
+     * @param percentWhole The percentage to calculate, must not be a fraction.
+     */
     function _calculateFee(uint256 _num, uint256 percentWhole)
         internal
         pure
@@ -235,6 +291,12 @@ contract ThredCore is
         return twoPercentOfTokens;
     }
 
+    /**
+     * @dev Calculate the Experience Points to set for the 'user'.
+     * @param user The user to calculate Exp for.
+     * @param cost The price of the app that is being installed.
+     * @param base The base amount to add to the user's Exp.
+     */
     function _calculateExp(
         address user,
         uint256 cost,
@@ -243,40 +305,60 @@ contract ThredCore is
         return _reputation[user].add(base.add(cost.div(10)));
     }
 
+    /**
+     * @dev Fetch the current Experience Points for the 'user'.
+     * @param user The user to fetch Exp for.
+     */
     function fetchRep(address user) public view returns (uint256) {
         return _reputation[user];
     }
 
-    function fetchDownloads(string calldata id, address creator)
+    /**
+     * @dev Fetch the current downloads for an application.
+     * @param id The ID of the application.
+     * @param signer Signer of the application's TVS Signature.
+     */
+    function fetchDownloads(string calldata id, address signer)
         public
         view
         returns (uint256)
     {
-        bytes32 key = keccak256(abi.encodePacked(id, creator));
+        bytes32 key = keccak256(abi.encodePacked(id, signer));
 
         return _downloads[key];
     }
 
-    function _verify(SmartUtil calldata util) internal view returns (address) {
+    /**
+     * @dev Verify and retrieve the Signer of the app's TVS Signature using ECDSA Decryption.
+     * @param util Signature of the app being installed.
+     */
+    function _verifyTVS(SmartUtil calldata util)
+        internal
+        view
+        returns (address)
+    {
         bytes32 digest = _hash(util);
         return ECDSAUpgradeable.recover(digest, util.signature);
     }
 
+    /**
+     * @dev Hash the application's TVS Signature.
+     * @param util Signature of the app being installed.
+     */
     function _hash(SmartUtil calldata util) internal view returns (bytes32) {
         return
             _hashTypedDataV4(
                 keccak256(
                     abi.encode(
                         keccak256(
-                            "SmartUtil(string name,string id,address pay_address,uint256 category,uint256 price,uint256 created,uint256 modified, uint chainId)"
+                            "SmartUtil(string id,address signer,address payAddress,address feeAddress,uint256 fee,uint256 price,uint256 chainId)"
                         ),
-                        keccak256(bytes(util.name)),
                         keccak256(bytes(util.id)),
-                        util.pay_address,
-                        util.category,
+                        util.signer,
+                        util.payAddress,
+                        util.feeAddress,
+                        util.fee,
                         util.price,
-                        util.created,
-                        util.modified,
                         util.chainId
                     )
                 )
