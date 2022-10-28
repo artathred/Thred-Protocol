@@ -69,6 +69,7 @@ contract ThredCore is
 
     /**
      * @dev Retrieves the current Chain ID of the protocol.
+     * @return The Chain ID of the protocol
      */
     function getChainID() public view returns (uint256) {
         uint256 id;
@@ -81,6 +82,7 @@ contract ThredCore is
     /**
      * @dev Retrieves the registered App ID for the provided Token ID.
      * @param tokenId Token ID of the installed application.
+     * @return The App ID corresponding to the Token ID
      */
     function getAppIdForToken(uint256 tokenId)
         public
@@ -133,7 +135,7 @@ contract ThredCore is
         _soulbounds[id] = soulbound;
         emit Soulbound(id, soulbound);
     }
-    
+
 
     /**
      * @dev Unpause all installations and withdrawals on the Thred Protocol.
@@ -166,6 +168,7 @@ contract ThredCore is
     /**
      * @dev Retrieves the current payouts for a given list of addresses.
      * @param payoutAddresses Array of addresses to fetch the payouts for.
+     * @return The available payouts for the provided addresses
      */
     function fetchPayouts(address[] calldata payoutAddresses)
         public
@@ -280,6 +283,7 @@ contract ThredCore is
      * @dev Calculate percentage fees from the given total.
      * @param _num The total amount.
      * @param percentWhole The percentage to calculate, must not be a fraction.
+     * @return The calculated percentage fees.
      */
     function _calculateFee(uint256 _num, uint256 percentWhole)
         internal
@@ -296,6 +300,7 @@ contract ThredCore is
      * @param user The user to calculate Exp for.
      * @param cost The price of the app that is being installed.
      * @param base The base amount to add to the user's Exp.
+     * @return The calculated Experience Points for the 'user'.
      */
     function _calculateExp(
         address user,
@@ -308,6 +313,7 @@ contract ThredCore is
     /**
      * @dev Fetch the current Experience Points for the 'user'.
      * @param user The user to fetch Exp for.
+     * @return The current Experience Points for the 'user'.
      */
     function fetchRep(address user) public view returns (uint256) {
         return _reputation[user];
@@ -317,6 +323,7 @@ contract ThredCore is
      * @dev Fetch the current downloads for an application.
      * @param id The ID of the application.
      * @param signer Signer of the application's TVS Signature.
+     * @return The current downloads of an application
      */
     function fetchDownloads(string calldata id, address signer)
         public
@@ -331,6 +338,7 @@ contract ThredCore is
     /**
      * @dev Verify and retrieve the Signer of the app's TVS Signature using ECDSA Decryption.
      * @param util Signature of the app being installed.
+     * @return The Decrypted Signer address.
      */
     function _verifyTVS(SmartUtil calldata util)
         internal
@@ -342,8 +350,9 @@ contract ThredCore is
     }
 
     /**
-     * @dev Hash the application's TVS Signature.
+     * @dev Hash and return the application's TVS Signature.
      * @param util Signature of the app being installed.
+     * @return The Digest of the TVS Signature
      */
     function _hash(SmartUtil calldata util) internal view returns (bytes32) {
         return
