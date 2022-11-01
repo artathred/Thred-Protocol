@@ -46,6 +46,7 @@ contract ThredCore is
         uint256 fee;
         uint256 price;
         uint256 chainId;
+        uint256 version;
         bytes signature;
     }
 
@@ -58,6 +59,8 @@ contract ThredCore is
     mapping(bytes32 => uint256) private _downloads;
 
     mapping(uint256 => string) private _ids;
+
+    mapping(bytes32 => uint256) private _versions;
 
     /**
      * @dev Pause all installations and withdrawals on the Thred Protocol.
@@ -136,7 +139,6 @@ contract ThredCore is
         emit Soulbound(id, soulbound);
     }
 
-
     /**
      * @dev Unpause all installations and withdrawals on the Thred Protocol.
      */
@@ -183,31 +185,72 @@ contract ThredCore is
     }
 
     /**
+     * @dev Retrieves the current installed apps for the wallet.
+     * @return The installed apps for the wallet
+     */
+    function fetchAppsForUser(address user)
+        public
+        view
+        returns (string[] memory)
+    {
+        uint256 appCount = registeredIds.current();
+        string[] memory apps = new string[](appCount);
+
+        for (uint256 i = 0; i < appCount; ++i) {
+            if (balanceOf(user, i) > 0) {
+                apps[i] = getAppIdForToken(i);
+            }
+        }
+        return apps;
+    }
+
+    /**
      * @dev Purchase, verify, and install an application under 'msg.sender'
      * @param util Signature of the app being installed.
      */
     function buySmartUtil(SmartUtil calldata util) public payable nonReentrant {
         require(!PausableUpgradeable.paused(), "Transacting Paused");
-
         address signer = _verifyTVS(util);
-
         require(
             signer == util.signer,
             "Unauthorized Signer. App can not be installed."
         );
-
         require(msg.value == util.price, "Insufficient Funds");
-
         require(
             util.chainId == getChainID(),
             "This item is not compatible with this chain"
         );
-
-        _registerDownload(util, signer);
-
+        bytes32 key = keccak256(abi.encodePacked(util.id, signer));
+        require(
+            util.version >= _versions[key],
+            "Signature Expired. Please use a newer app signature"
+        );
+        _versions[key] = util.version;
+        _registerDownload(util, signer, key);
         _setDeductibles(util);
-
         _setExp(util, signer);
+    }
+
+    /**
+     * @dev Check if the given array contains the given element.
+     * @param user The element to check for.
+     * @param users The array to check.
+     */
+    function _addressContains(address user, address[] calldata users)
+        private
+        pure
+        returns (bool)
+    {
+        uint256 length = users.length;
+        if (length > 10) {
+            length = 10;
+        }
+        for (uint i = 0; i < length; i++) {
+            if (users[i] == user) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**
@@ -215,11 +258,11 @@ contract ThredCore is
      * @param util Signature of the app being installed.
      * @param signer Signer of the application's TVS Signature.
      */
-    function _registerDownload(SmartUtil calldata util, address signer)
-        internal
-    {
-        bytes32 key = keccak256(abi.encodePacked(util.id, signer));
-
+    function _registerDownload(
+        SmartUtil calldata util,
+        address signer,
+        bytes32 key
+    ) internal {
         uint256 tokenId = _keys[key];
 
         if (tokenId == 0) {
@@ -360,7 +403,7 @@ contract ThredCore is
                 keccak256(
                     abi.encode(
                         keccak256(
-                            "SmartUtil(string id,address signer,address payAddress,address feeAddress,uint256 fee,uint256 price,uint256 chainId)"
+                            "SmartUtil(string id,address signer,address payAddress,address feeAddress,uint256 fee,uint256 price,uint256 chainId,uint256 version)"
                         ),
                         keccak256(bytes(util.id)),
                         util.signer,
@@ -368,7 +411,8 @@ contract ThredCore is
                         util.feeAddress,
                         util.fee,
                         util.price,
-                        util.chainId
+                        util.chainId,
+                        util.version
                     )
                 )
             );
