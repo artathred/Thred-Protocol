@@ -47,6 +47,7 @@ contract ThredCore is
         uint256 price;
         uint256 chainId;
         uint256 version;
+        bool listed;
         bytes signature;
     }
 
@@ -224,6 +225,9 @@ contract ThredCore is
         require(
             util.version >= _versions[key],
             "Signature Expired. Please use a newer app signature"
+        );
+        require(
+            util.listed, "App is not available for download"
         );
         _versions[key] = util.version;
         _registerDownload(util, signer, key);
@@ -403,7 +407,7 @@ contract ThredCore is
                 keccak256(
                     abi.encode(
                         keccak256(
-                            "SmartUtil(string id,address signer,address payAddress,address feeAddress,uint256 fee,uint256 price,uint256 chainId,uint256 version)"
+                            "SmartUtil(string id,address signer,address payAddress,address feeAddress,uint256 fee,uint256 price,uint256 chainId,uint256 version,bool listed)"
                         ),
                         keccak256(bytes(util.id)),
                         util.signer,
@@ -412,7 +416,8 @@ contract ThredCore is
                         util.fee,
                         util.price,
                         util.chainId,
-                        util.version
+                        util.version,
+                        util.listed
                     )
                 )
             );
