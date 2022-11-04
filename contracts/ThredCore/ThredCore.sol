@@ -198,8 +198,8 @@ contract ThredCore is
         string[] memory apps = new string[](appCount);
 
         for (uint256 i = 0; i < appCount; ++i) {
-            if (balanceOf(user, i) > 0) {
-                apps[i] = getAppIdForToken(i);
+            if (balanceOf(user, i+1) > 0) {
+                apps[i] = getAppIdForToken(i+1);
             }
         }
         return apps;
