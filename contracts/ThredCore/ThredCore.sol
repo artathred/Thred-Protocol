@@ -198,8 +198,8 @@ contract ThredCore is
         string[] memory apps = new string[](appCount);
 
         for (uint256 i = 0; i < appCount; ++i) {
-            if (balanceOf(user, i+1) > 0) {
-                apps[i] = getAppIdForToken(i+1);
+            if (balanceOf(user, i + 1) > 0) {
+                apps[i] = getAppIdForToken(i + 1);
             }
         }
         return apps;
@@ -222,37 +222,43 @@ contract ThredCore is
             "This item is not compatible with this chain"
         );
         bytes32 key = keccak256(abi.encodePacked(util.id, signer));
+        uint256 tokenId = _keys[key];
+
+        if (tokenId > 0) {
+            require(
+                balanceOf(msg.sender, tokenId) == 0,
+                "App is already installed on this address."
+            );
+        }
+
         require(
             util.version >= _versions[key],
             "Signature Expired. Please use a newer app signature"
         );
-        require(
-            util.listed, "App is not available for download"
-        );
+        require(util.listed, "App is not available for download");
         _versions[key] = util.version;
-        _registerDownload(util, signer, key);
+        _registerDownload(util, signer, tokenId, key);
         _setDeductibles(util);
         _setExp(util, signer);
     }
 
     /**
-     * @dev Check if the given array contains the given element.
-     * @param user The element to check for.
-     * @param users The array to check.
+     * @dev Check if an app is already installed by 'user'.
+     * @param id The App ID corresponding to the Token ID
+     * @param signer Signer of the application's TVS Signature.
+     * @param user The user to check for.
      */
-    function _addressContains(address user, address[] calldata users)
-        private
-        pure
-        returns (bool)
-    {
-        uint256 length = users.length;
-        if (length > 10) {
-            length = 10;
-        }
-        for (uint i = 0; i < length; i++) {
-            if (users[i] == user) {
-                return true;
-            }
+    function appInstalled(
+        string calldata id,
+        address signer,
+        address user
+    ) public view returns (bool) {
+        bytes32 key = keccak256(abi.encodePacked(id, signer));
+
+        uint256 tokenId = _keys[key];
+
+        if (tokenId > 0) {
+            return balanceOf(user, tokenId) > 0;
         }
         return false;
     }
@@ -261,14 +267,15 @@ contract ThredCore is
      * @dev Register the application under 'msg.sender'.
      * @param util Signature of the app being installed.
      * @param signer Signer of the application's TVS Signature.
+     * @param tokenId Token ID of the application.
+     * @param key Unique TVS-Generated Key of the application.
      */
     function _registerDownload(
         SmartUtil calldata util,
         address signer,
+        uint256 tokenId,
         bytes32 key
     ) internal {
-        uint256 tokenId = _keys[key];
-
         if (tokenId == 0) {
             registeredIds.increment();
             tokenId = registeredIds.current();
